@@ -1,5 +1,28 @@
 # llama.cpp
 
+## About this fork
+
+This fork of [llama.cpp](https://github.com/ggml-org/llama.cpp) adds **TurboQuant**, a KV-cache compression method, on top of an upstream-synced base. Upstream behaviour is unchanged unless you select a fork-only type.
+
+### What this fork adds
+
+- **Turbo KV-cache types** (`turbo2`, `turbo3`, `turbo4`, plus `turbo5` and `turbo6` in the allow-list). Pass them with `-ctk` and `-ctv`. Before quantizing, each cache vector is rotated with a fixed 128x128 Walsh-Hadamard transform, which makes its distribution easier to quantize. Head dimensions that are not multiples of 128 are zero-padded.
+- **TQ3_1S and TQ4_1S weight types**: 3- and 4-bit model-weight formats, exposed as `llama-quantize` targets.
+- **Phase 1 verification (CUDA build on Linux, GB10)**: checks that `-ctk` and `-ctv` accept `turbo2`, `turbo3` and `turbo4` and reject unknown types such as `turbo9`. Results are in `docs/kv-dtypes/phase1-results.md`.
+- **Web UI build fix**: the UI embed step no longer requires `workbox-*.js`, which newer UI bundles do not ship. The PWA spec checks the current `service-worker.js`.
+
+Turbo cache types are runtime-only and are never stored in GGUF files.
+
+### Where to look
+
+- Fork design notes and test gates: [`AGENTS.md`](AGENTS.md)
+- Phase 1 results: [`docs/kv-dtypes/phase1-results.md`](docs/kv-dtypes/phase1-results.md)
+
+Everything below is the upstream llama.cpp README.
+
+---
+
+
 ![llama](https://raw.githubusercontent.com/ggml-org/llama.brand/refs/heads/master/cover/llama-cpp/cover-llama-cpp-dark.svg)
 
 <div align="center">
