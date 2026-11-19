@@ -197,9 +197,6 @@ int main(int argc, char ** argv) {
             { "bundle[hash].css",     [](const std::string & b) {
                 return str_starts_with(b, "bundle")  && str_ends_with(b, ".css");
             }, false },
-            { "workbox[hash].js",     [](const std::string & b) {
-                return str_starts_with(b, "workbox") && str_ends_with(b, ".js");
-            }, false },
         };
 
         for (const auto & a : assets) {
