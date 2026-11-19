@@ -13,6 +13,14 @@ This fork of [llama.cpp](https://github.com/ggml-org/llama.cpp) adds **TurboQuan
 
 Turbo cache types are runtime-only and are never stored in GGUF files.
 
+### Branches and tags
+
+- **`master`** mirrors upstream [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp). Do not commit fork changes to it, so upstream merges stay clean.
+- **`scalland`** holds all fork changes. Upstream changes are merged into `master`, then into `scalland`.
+- Upstream release tags are `bXXXXX`. Fork release tags follow the same pattern as `sXXXXX` (for example `s00001`), and each one marks a fork release on `scalland`.
+
+**Current state:** `scalland` is built on TheTom's TurboQuant base (commit `4185b90a0`), not yet on `master`. Moving the fork changes onto `master` is in progress, so until it's done, upstream merges into `master` will not reach `scalland`.
+
 ### Where to look
 
 - Fork design notes and test gates: [`AGENTS.md`](AGENTS.md)
