@@ -14,18 +14,21 @@ describe('PWA Build Output', () => {
 		return;
 	}
 
-	const swContent = readFileSync(resolve(DIST_DIR, 'sw.js'), 'utf-8');
+	// The active worker is service-worker.js. sw.js is a legacy stub that removes the old worker.
+const swContent = readFileSync(resolve(DIST_DIR, 'service-worker.js'), 'utf-8');
 	const indexContent = readFileSync(resolve(DIST_DIR, 'index.html'), 'utf-8');
 
 	describe('Core files exist', () => {
-		it('service worker (sw.js) exists', () => {
-			expect(existsSync(resolve(DIST_DIR, 'sw.js')), 'sw.js not found').toBeTruthy();
+		it('active service worker (service-worker.js) exists', () => {
+			expect(
+				existsSync(resolve(DIST_DIR, 'service-worker.js')),
+				'service-worker.js not found'
+			).toBeTruthy();
 		});
 
-		it('workbox library exists (hashed filename)', () => {
-			// SvelteKit generates workbox-{hash}.js files
-			const files = readdirSync(DIST_DIR).filter((f) => f.match(/^workbox-[^.]+\.js$/));
-			expect(files.length).toBeGreaterThan(0);
+		it('legacy sw.js stub exists and removes the old worker', () => {
+			expect(existsSync(resolve(DIST_DIR, 'sw.js')), 'sw.js not found').toBeTruthy();
+			expect(readFileSync(resolve(DIST_DIR, 'sw.js'), 'utf-8')).toMatch(/unregister/);
 		});
 
 		it('manifest.webmanifest exists', () => {
@@ -73,39 +76,27 @@ describe('PWA Build Output', () => {
 	});
 
 	describe('Service worker content', () => {
-		it('service worker has minified self.define format', () => {
-			expect(swContent).toBeTruthy();
-			// SvelteKit's workbox-plugin-sveltekit produces a minified SW with self.define
-			expect(swContent).toMatch(/if\(!self.define\)/);
-		});
-
-		it('references hashed workbox file (SvelteKit build output)', () => {
-			expect(swContent).toBeTruthy();
-			// SvelteKit's workbox-plugin-sveltekit references hashed workbox files
-			expect(swContent).toMatch(/define\(\["\.\/workbox-[a-zA-Z0-9]+"\]/);
-		});
-
 		it('precache contains SvelteKit bundle.js with content hash', () => {
 			expect(swContent).toBeTruthy();
 			// SvelteKit uses content-hashed bundle names in _app/immutable/
-			expect(swContent).toMatch(/"_app\/immutable\/bundle\.[a-zA-Z0-9_-]+\.js"/);
+			expect(swContent).toMatch(/[`"]_app\/immutable\/bundle\.[a-zA-Z0-9_-]+\.js[`"]/);
 		});
 
 		it('precache contains SvelteKit bundle.css with content hash', () => {
 			expect(swContent).toBeTruthy();
 			// SvelteKit uses content-hashed CSS bundle names in _app/immutable/assets/
-			expect(swContent).toMatch(/"_app\/immutable\/assets\/bundle\.[a-zA-Z0-9_-]+\.css"/);
+			expect(swContent).toMatch(/[`"]_app\/immutable\/assets\/bundle\.[a-zA-Z0-9_-]+\.css[`"]/);
 		});
 
 		it('precache contains _app/version.json', () => {
 			expect(swContent).toBeTruthy();
 			// SvelteKit stores version.json in _app directory
-			expect(swContent).toMatch(/"_app\/version\.json"/);
+			expect(swContent).toMatch(/[`"]_app\/version\.json[`"]/);
 		});
 
 		it('precache contains manifest.webmanifest', () => {
 			expect(swContent).toBeTruthy();
-			expect(swContent).toMatch(/"manifest\.webmanifest"/);
+			expect(swContent).toMatch(/[`"]manifest\.webmanifest[`"]/);
 		});
 
 		it('no navigation route — API endpoints bypass PWA', () => {
@@ -115,11 +106,6 @@ describe('PWA Build Output', () => {
 			expect(swContent).not.toMatch(/NavigationRoute/);
 		});
 
-		it('has runtime caching for API routes', () => {
-			expect(swContent).toBeTruthy();
-			expect(swContent).toMatch(/api-cache/);
-			expect(swContent).toMatch(/NetworkFirst/);
-		});
 	});
 
 	describe('index.html content', () => {
@@ -169,13 +155,6 @@ describe('PWA Build Output', () => {
 	describe('SvelteKit _app directory', () => {
 		it('_app directory exists (SvelteKit uses it for hashed assets)', () => {
 			expect(existsSync(resolve(DIST_DIR, '_app'))).toBeTruthy();
-		});
-	});
-
-	describe('Hashed workbox files', () => {
-		it('workbox-*.js files exist in dist root (SvelteKit build output)', () => {
-			const files = readdirSync(DIST_DIR).filter((f) => f.match(/^workbox-[^.]+\.js$/));
-			expect(files.length).toBeGreaterThan(0);
 		});
 	});
 
