@@ -260,7 +260,14 @@ extern "C" {
         GGML_TYPE_Q1_0    = 41,
         GGML_TYPE_Q2_0    = 42,
         GGML_TYPE_F8_E4M3 = 43,
-        GGML_TYPE_COUNT   = 44,
+        // 44-49 reserved for upstream's future types
+        // TurboQuant KV-cache types (runtime-only, never written to GGUF). Fixed IDs at the top of the range.
+        GGML_TYPE_TURBO2_0 = 50, // TurboQuant 2-bit KV cache: WHT + 2-bit PolarQuant
+        GGML_TYPE_TURBO3_0 = 51, // TurboQuant 3-bit KV cache: WHT + 3-bit PolarQuant
+        GGML_TYPE_TURBO4_0 = 52, // TurboQuant 4-bit KV cache: WHT + 4-bit PolarQuant
+        GGML_TYPE_TURBO5_0 = 53, // TurboQuant 5-bit KV cache: WHT + 5-bit PolarQuant
+        GGML_TYPE_TURBO6_0 = 54, // TurboQuant 6-bit KV cache: WHT + 6-bit PolarQuant
+        GGML_TYPE_COUNT   = 55,
     };
 
     // [TAG_GGML_PREC]
