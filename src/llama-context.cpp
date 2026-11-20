@@ -4550,6 +4550,11 @@ llama_context * llama_init_from_model(
         }
     }
 
+    const bool turbo_k = params.type_k >= GGML_TYPE_TURBO2_0 && params.type_k <= GGML_TYPE_TURBO6_0;
+    if (turbo_k && params.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_DISABLED) {
+        LLAMA_LOG_WARN("%s: TurboQuant K cache without flash_attn does not use the fused attention kernels\n", __func__);
+    }
+
     if (ggml_is_quantized(params.type_v) && params.flash_attn_type != LLAMA_FLASH_ATTN_TYPE_ENABLED) {
         if (params.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_AUTO) {
             LLAMA_LOG_INFO("%s: enabling flash_attn since it is required for quantized V cache\n", __func__);

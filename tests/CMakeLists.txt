@@ -365,6 +365,9 @@ if (GGML_METAL AND NOT GGML_BACKEND_DL)
 endif()
 
 llama_build(test-backend-ops.cpp LINK ggml Threads::Threads)
+# TurboQuant flash attention must match the CPU reference for every turbo K/V type
+llama_build_and_test(test-turbo-codec.cpp  LABEL "main behavior"  LINK ggml)
+add_test(NAME test-turbo-attn-equiv COMMAND test-backend-ops test -o FLASH_ATTN_EXT -p "type_K=turbo")
 
 llama_build_and_test(test-backend-tensor.cpp LINK ggml)
 

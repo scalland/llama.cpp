@@ -327,6 +327,12 @@ static int test_vec_dot_q(bool verbose) {
             continue;
         }
 
+        // TurboQuant stores vectors rotated by the WHT, and turbo5/6 are not implemented yet:
+        // tests/test-turbo-codec.cpp covers turbo2/3/4
+        if (type >= GGML_TYPE_TURBO2_0 && type <= GGML_TYPE_TURBO6_0) {
+            continue;
+        }
+
         const ggml_type ei = (ggml_type)i;
 
         printf("Testing %s\n", ggml_type_name((ggml_type) i));
