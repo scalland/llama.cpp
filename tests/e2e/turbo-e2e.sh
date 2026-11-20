@@ -60,7 +60,7 @@ run_cli() {
     local name="$1"
     shift
     RUN_OUT="$WORK_DIR/$name.log"
-    "$CLI" -m "$MODEL" -p "$PROMPT" -n 64 -no-cnv "$@" >"$RUN_OUT" 2>&1 </dev/null
+    "$CLI" -m "$MODEL" -p "$PROMPT" -n 64 -st "$@" >"$RUN_OUT" 2>&1 </dev/null
     RUN_RC=$?
 }
 
@@ -134,6 +134,8 @@ case_turbo_v_fa_off() {
     run_cli "$name" -fa off -ctk f16 -ctv turbo3
     if [ "$RUN_RC" -eq 0 ]; then
         fail "$name" "exit code 0 (expected non-zero)"
+    elif ! grep -q "quantized V cache requires flash_attn to be enabled" "$RUN_OUT"; then
+        fail "$name" "flash-attention refusal text not found in output"
     else
         pass "$name"
     fi
