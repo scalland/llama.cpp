@@ -308,7 +308,7 @@ static ggml_type kv_cache_type_from_str(const std::string & s) {
             return type;
         }
     }
-    throw std::runtime_error("Unsupported cache type: " + s + "; allowed values: " + get_all_kv_cache_types());
+    throw std::invalid_argument("Unsupported cache type: " + s + "; allowed values: " + get_all_kv_cache_types());
 }
 
 static bool parse_bool_value(const std::string & value) {

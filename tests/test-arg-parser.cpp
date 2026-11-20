@@ -462,14 +462,54 @@ static void test(void) {
         }
     }
 
-    // KV cache type names: supported types parse, unsupported ones are rejected
+    // KV cache type names: supported types parse, unsupported ones are rejected.
+    // These use explicit checks instead of assert(), which is compiled out under NDEBUG.
+    auto expect = [](bool cond, const char * what) {
+        if (!cond) {
+            fprintf(stderr, "test-arg-parser: check failed: %s\n", what);
+            exit(1);
+        }
+    };
     for (const char * type : {"f16", "q8_0", "turbo2", "turbo3", "turbo4"}) {
         argv = {"binary_name", "--cache-type-k", type};
-        assert(true == common_params_parse(argv.size(), list_str_to_char(argv).data(), params, LLAMA_EXAMPLE_COMMON));
+        common_params type_params;
+        expect(common_params_parse(argv.size(), list_str_to_char(argv).data(), type_params, LLAMA_EXAMPLE_COMMON),
+               "supported cache type is accepted");
     }
     for (const char * type : {"turbo5", "turbo6", "turbo8"}) {
         argv = {"binary_name", "--cache-type-k", type};
-        assert(false == common_params_parse(argv.size(), list_str_to_char(argv).data(), params, LLAMA_EXAMPLE_COMMON));
+        common_params type_params;
+        expect(!common_params_parse(argv.size(), list_str_to_char(argv).data(), type_params, LLAMA_EXAMPLE_COMMON),
+               "unsupported cache type is rejected at parse time");
+    }
+
+    // the rejection message names the supported set
+    {
+        common_params msg_params;
+        auto ctx_arg = common_params_parser_init(msg_params, LLAMA_EXAMPLE_COMMON);
+        const common_arg * cache_opt = nullptr;
+        for (const auto & opt : ctx_arg.options) {
+            for (const auto & arg : opt.args) {
+                if (std::string(arg) == "--cache-type-k") {
+                    cache_opt = &opt;
+                }
+            }
+        }
+        expect(cache_opt != nullptr && cache_opt->handler_string != nullptr, "--cache-type-k handler is present");
+        for (const char * type : {"turbo5", "turbo6", "turbo8"}) {
+            std::string msg;
+            bool threw = false;
+            try {
+                cache_opt->handler_string(msg_params, type);
+            } catch (const std::invalid_argument & e) {
+                threw = true;
+                msg = e.what();
+            }
+            expect(threw, "unsupported cache type throws std::invalid_argument");
+            expect(msg.find("turbo2") != std::string::npos, "error message names turbo2");
+            expect(msg.find("turbo3") != std::string::npos, "error message names turbo3");
+            expect(msg.find("turbo4") != std::string::npos, "error message names turbo4");
+        }
     }
 
     printf("test-arg-parser: all tests OK\n\n");
