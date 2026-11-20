@@ -291,7 +291,7 @@ static_assert(sizeof(block_tq2_0) == sizeof(ggml_half) + QK_K / 4, "wrong tq2_0 
 // Storage block size = 32 (matches q4_0 for optimal GPU parallelism)
 // Transform group size = 128 (head_dim, for rotation Gaussianization)
 // Per block: norm(fp16) + 2-bit indices (8 bytes) + 1-bit extra (4 bytes) = 14 bytes per 32 values
-// = 3.5 bits/value → 4.6× compression vs fp16
+// = 3.5 bits/value -> 4.6x compression vs fp16
 // The 3-bit index is split: lower 2 bits in qs[], upper 1 bit in signs[]
 #define QK_TURBO3 128   // Block size 128: one block per rotation group, eliminates redundant norms
 #define QK_TURBO3_GROUP 128  // rotation group size = head_dim
@@ -318,7 +318,7 @@ static_assert(sizeof(block_turbo3_0) == sizeof(ggml_half) + QK_TURBO3/4 + QK_TUR
 #if TURBO4_USE_4BIT
 // 4-bit PolarQuant: 16 optimal centroids, nibble packed, no QJL
 // Per block: norm(fp16) + rnorm(fp16, reserved) + 4-bit indices (64 bytes)
-// = 68 bytes per 128 values = 4.25 bits/value → 3.8× compression vs fp16
+// = 68 bytes per 128 values = 4.25 bits/value -> 3.8x compression vs fp16
 typedef struct {
     ggml_half  norm;                    //  2 bytes
     uint8_t    qs[QK_TURBO4 / 2];      // 64 bytes: 4-bit PolarQuant indices (nibble packed)
@@ -327,7 +327,7 @@ static_assert(sizeof(block_turbo4_0) == 66, "wrong turbo4_0 block size");
 #else
 // Legacy 3-bit PolarQuant + 1-bit QJL (original paper design)
 // Per block: norm(fp16) + rnorm(fp16) + 3-bit indices (48 bytes) + 1-bit QJL signs (16 bytes)
-// = 68 bytes per 128 values = 4.25 bits/value → 3.8× compression vs fp16
+// = 68 bytes per 128 values = 4.25 bits/value -> 3.8x compression vs fp16
 typedef struct {
     ggml_half  norm;                    //  2 bytes
     ggml_half  rnorm;                   //  2 bytes: residual norm for QJL scale
@@ -371,7 +371,7 @@ static_assert(QK_TURBO5 == 128, "turbo5 kernels assume QK_TURBO5 == 128");
 
 // TurboQuant 2-bit: 2-bit PolarQuant indices only (no QJL)
 // Per block: norm(fp16) + 2-bit indices (8 bytes) = 10 bytes per 32 values
-// = 2.5 bits/value → 6.4× compression vs fp16
+// = 2.5 bits/value -> 6.4x compression vs fp16
 // 4 centroids (Lloyd-Max for N(0, 1/128)): {-0.133462, -0.039994, 0.039994, 0.133462}
 #define QK_TURBO2 128   // Block size 128: one block per rotation group
 #define QK_TURBO2_GROUP 128  // rotation group size = head_dim

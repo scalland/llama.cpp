@@ -137,7 +137,7 @@ static __device__ __forceinline__ void turbo_fwht_64(float * x) {
     }
 }
 
-// ---- Forward rotation: signs1 → FWHT → signs2 ----
+// ---- Forward rotation: signs1 -> FWHT -> signs2 ----
 
 static __device__ __forceinline__ void turbo_rotate_forward(float * x) {
     for (int i = 0; i < 128; i++) x[i] *= TURBO_WHT_SIGNS1[i];
@@ -164,7 +164,7 @@ static __device__ float d_innerq_scale_inv[INNERQ_MAX_CHANNELS];
 static __device__ float d_innerq_sq_accum[INNERQ_MAX_CHANNELS];
 static __device__ int   d_innerq_count;
 static __device__ int   d_innerq_active;       // 0 = scales are identity, 1 = scales applied
-static __device__ int   d_innerq_calibrating;  // 1 = accumulating K² stats
+static __device__ int   d_innerq_calibrating;  // 1 = accumulating K^2 stats
 
 static int  innerq_enabled       = 0;  // host: 0=off, 1=calibrating, 2=active
 static int  innerq_target_tokens = 0;
@@ -200,7 +200,7 @@ static void turbo_innerq_init(void) {
                    __func__, innerq_target_tokens, innerq_strength);
 }
 
-// Host: finalize calibration — compute scales, upload, activate
+// Host: finalize calibration - compute scales, upload, activate
 static void turbo_innerq_finalize(int group_size) {
     // Read accumulators from device
     float sq_accum[INNERQ_MAX_CHANNELS];
@@ -275,12 +275,12 @@ static void turbo_innerq_check_finalize(int group_size, int64_t ne00) {
     if (innerq_enabled == 0) return;
 
     // InnerQ only works when each WHT group = one head (group_size == head_dim).
-    // For standard models: ne00 = n_heads * head_dim, group_size = head_dim → ne00 % group_size == 0, fine.
-    // For non-standard models (head_dim > group_size, e.g. GLM 576 → 64-group):
-    //   ne00 = head_dim (single head), group_size = 64, ne00/group_size = 9 groups per head → WRONG.
+    // For standard models: ne00 = n_heads * head_dim, group_size = head_dim -> ne00 % group_size == 0, fine.
+    // For non-standard models (head_dim > group_size, e.g. GLM 576 -> 64-group):
+    //   ne00 = head_dim (single head), group_size = 64, ne00/group_size = 9 groups per head -> WRONG.
     // Detect: if ne00 / group_size doesn't divide evenly into standard head counts (1,2,4,8,16,32,64,128),
     // it's likely multi-group-per-head. Simpler check: group_size < 128 means head_dim > 128.
-    const bool multi_group_per_head = (group_size < 128);  // 64-group → head_dim > 128, multi-group
+    const bool multi_group_per_head = (group_size < 128);  // 64-group -> head_dim > 128, multi-group
     if (multi_group_per_head) {
         if (innerq_enabled == 1) {
             GGML_LOG_WARN("%s: InnerQ disabled (ne00=%lld != group_size=%d, multi-group heads)\n",

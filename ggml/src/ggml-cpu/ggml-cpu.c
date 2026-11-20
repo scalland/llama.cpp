@@ -456,7 +456,7 @@ ggml_to_float_t ggml_cpu_get_to_float(enum ggml_type type) {
     return ggml_get_type_traits(type)->to_float;
 }
 
-// vy is plain f32 — used by CPU flash attention against a TurboQuant KV cache
+// vy is plain f32 - used by CPU flash attention against a TurboQuant KV cache
 // for head dims the GPU backends do not support (e.g. D=192).
 static void ggml_vec_dot_turbo_f32_impl(enum ggml_type type_x, int n, float * GGML_RESTRICT s,
                                         const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy) {
@@ -487,7 +487,7 @@ static void ggml_vec_dot_turbo_f32_impl(enum ggml_type type_x, int n, float * GG
     *s = sum;
 }
 
-// vy is q8_0 — the weight-matmul path for the TQ*_1S types.
+// vy is q8_0 - the weight-matmul path for the TQ*_1S types.
 static void ggml_vec_dot_tq_q8_0_impl(enum ggml_type type_x, int n, float * GGML_RESTRICT s,
                                       const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy) {
     const struct ggml_type_traits * trx = ggml_get_type_traits(type_x);
