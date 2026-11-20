@@ -462,6 +462,16 @@ static void test(void) {
         }
     }
 
+    // KV cache type names: supported types parse, unsupported ones are rejected
+    for (const char * type : {"f16", "q8_0", "turbo2", "turbo3", "turbo4"}) {
+        argv = {"binary_name", "--cache-type-k", type};
+        assert(true == common_params_parse(argv.size(), list_str_to_char(argv).data(), params, LLAMA_EXAMPLE_COMMON));
+    }
+    for (const char * type : {"turbo5", "turbo6", "turbo8"}) {
+        argv = {"binary_name", "--cache-type-k", type};
+        assert(false == common_params_parse(argv.size(), list_str_to_char(argv).data(), params, LLAMA_EXAMPLE_COMMON));
+    }
+
     printf("test-arg-parser: all tests OK\n\n");
 }
 
