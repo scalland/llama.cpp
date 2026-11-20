@@ -117,7 +117,7 @@ case_turbo5_refused() {
 case_turbo_k_fa_off() {
     local name="turbo_k_fa_off"
     CASES=$((CASES + 1))
-    run_cli "$name" -fa off -ctk turbo3 -ctv f16
+    run_cli "$name" -fa off -ctk turbo3 -ctv f16 -lv 2
     if [ "$RUN_RC" -ne 0 ]; then
         fail "$name" "exit code $RUN_RC (expected 0)"
     elif ! grep -q "TurboQuant K cache without flash_attn" "$RUN_OUT"; then
