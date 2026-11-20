@@ -96,7 +96,7 @@ static __global__ void flash_attn_ext_vec(
     constexpr int V_cols_per_iter   = WARP_SIZE / nthreads_V;
 
     constexpr vec_dot_KQ_t vec_dot_KQ = get_vec_dot_KQ<type_K, D, nthreads_KQ>();
-    constexpr bool Q_q8_1 = type_K != GGML_TYPE_F16 && type_K != GGML_TYPE_BF16 && type_K != GGML_TYPE_F8_E4M3;
+    constexpr bool Q_q8_1 = type_K != GGML_TYPE_F16 && type_K != GGML_TYPE_BF16 && type_K != GGML_TYPE_F8_E4M3 && !ggml_cuda_is_turbo_type(type_K);
 #ifdef V_DOT2_F32_F16_AVAILABLE
     constexpr dequantize_V_t dequantize_V = get_dequantize_V<type_V, half,  V_rows_per_thread>();
 #else
@@ -203,7 +203,7 @@ static __global__ void flash_attn_ext_vec(
         }
 
         __syncthreads();
-    } else if constexpr (type_K == GGML_TYPE_F8_E4M3) {
+    } else if constexpr (type_K == GGML_TYPE_F8_E4M3 || ggml_cuda_is_turbo_type(type_K)) {
 #pragma unroll
         for (int j = 0; j < ncols; ++j) {
             const float * Q_j = (const float *) (Q + j*nb01);
@@ -636,3 +636,15 @@ EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_Q5_1)
 EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_Q8_0)
 EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_BF16)
 EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_F8_E4M3)
+
+#define EXTERN_DECL_FATTN_VEC_CASES_TURBO(D, type_K)            \
+    extern DECL_FATTN_VEC_CASE(D, type_K, GGML_TYPE_TURBO2_0); \
+    extern DECL_FATTN_VEC_CASE(D, type_K, GGML_TYPE_TURBO3_0); \
+    extern DECL_FATTN_VEC_CASE(D, type_K, GGML_TYPE_TURBO4_0);
+
+EXTERN_DECL_FATTN_VEC_CASES_TURBO(128, GGML_TYPE_TURBO2_0)
+EXTERN_DECL_FATTN_VEC_CASES_TURBO(128, GGML_TYPE_TURBO3_0)
+EXTERN_DECL_FATTN_VEC_CASES_TURBO(128, GGML_TYPE_TURBO4_0)
+EXTERN_DECL_FATTN_VEC_CASES_TURBO(256, GGML_TYPE_TURBO2_0)
+EXTERN_DECL_FATTN_VEC_CASES_TURBO(256, GGML_TYPE_TURBO3_0)
+EXTERN_DECL_FATTN_VEC_CASES_TURBO(256, GGML_TYPE_TURBO4_0)

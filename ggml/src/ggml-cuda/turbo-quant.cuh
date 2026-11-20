@@ -348,14 +348,33 @@ static __device__ __forceinline__ uint8_t turbo_nearest_centroid_4bit(float val)
 
 // ---- Per-block quantize for turbo4 (128 elements, expects already-rotated input) ----
 
+// Full per-block quantize, bit-compatible with quantize_row_turbo*_0_ref in ggml-turbo-quant.c:
+// L2 norm -> normalize -> forward WHT (signs1, butterfly, signs2) -> nearest centroid -> pack
+// -> corrected norm = norm / ||centroids||. One block is one 128-element rotation group.
+static __device__ __forceinline__ float turbo_group_norm_rotated(const float * __restrict__ src, float * __restrict__ rot) {
+    float norm_sq = 0.0f;
+    for (int j = 0; j < QK_TURBO3; j++) norm_sq += src[j] * src[j];
+    const float grp_norm = sqrtf(norm_sq);
+    const float inv = (grp_norm > 1e-10f) ? 1.0f / grp_norm : 0.0f;
+    for (int j = 0; j < QK_TURBO3; j++) rot[j] = src[j] * inv;
+    turbo_rotate_forward(rot);
+    return grp_norm;
+}
+
 static __device__ void quantize_f32_turbo4_0_block(const float * __restrict__ src,
                                                     block_turbo4_0 * __restrict__ dst) {
+    float rot[QK_TURBO4];
+    const float grp_norm = turbo_group_norm_rotated(src, rot);
     for (int j = 0; j < QK_TURBO4 / 2; j++) dst->qs[j] = 0;
-
+    float recon_sq = 0.0f;
     for (int j = 0; j < QK_TURBO4; j++) {
-        uint8_t idx = turbo_nearest_centroid_4bit(src[j]);
+        const uint8_t idx = turbo_nearest_centroid_4bit(rot[j]);
         dst->qs[j / 2] |= (idx & 0xF) << ((j % 2) * 4);
+        recon_sq += TURBO_CENTROIDS_4BIT[idx] * TURBO_CENTROIDS_4BIT[idx];
     }
+    const float recon_norm = sqrtf(recon_sq);
+    const float corrected  = (recon_norm > 1e-10f) ? grp_norm / recon_norm : grp_norm;
+    dst->norm = __float2half(corrected);
 }
 
 // ---- Inline dequant helper: extract one float from turbo4 block ----
@@ -516,16 +535,20 @@ static __device__ __forceinline__ uint8_t turbo_nearest_centroid_3bit(float val)
 
 static __device__ void quantize_f32_turbo3_0_block(const float * __restrict__ src,
                                                     block_turbo3_0 * __restrict__ dst) {
+    float rot[QK_TURBO3];
+    const float grp_norm = turbo_group_norm_rotated(src, rot);
     for (int j = 0; j < QK_TURBO3 / 4; j++) dst->qs[j] = 0;
     for (int j = 0; j < QK_TURBO3 / 8; j++) dst->signs[j] = 0;
-
+    float recon_sq = 0.0f;
     for (int j = 0; j < QK_TURBO3; j++) {
-        uint8_t idx = turbo_nearest_centroid_3bit(src[j]);
+        const uint8_t idx = turbo_nearest_centroid_3bit(rot[j]);
         dst->qs[j / 4] |= (idx & 0x3) << ((j % 4) * 2);
-        if (idx & 0x4) {
-            dst->signs[j / 8] |= (1 << (j % 8));
-        }
+        if (idx & 0x4) dst->signs[j / 8] |= (1 << (j % 8));
+        recon_sq += TURBO_CENTROIDS_3BIT[idx] * TURBO_CENTROIDS_3BIT[idx];
     }
+    const float recon_norm = sqrtf(recon_sq);
+    const float corrected  = (recon_norm > 1e-10f) ? grp_norm / recon_norm : grp_norm;
+    dst->norm = __float2half(corrected);
 }
 
 // ---- Inline dequant helper: extract one float from turbo3 block ----
@@ -551,12 +574,18 @@ static __device__ __forceinline__ uint8_t turbo_nearest_centroid_2bit(float val)
 
 static __device__ void quantize_f32_turbo2_0_block(const float * __restrict__ src,
                                                     block_turbo2_0 * __restrict__ dst) {
+    float rot[QK_TURBO2];
+    const float grp_norm = turbo_group_norm_rotated(src, rot);
     for (int j = 0; j < QK_TURBO2 / 4; j++) dst->qs[j] = 0;
-
+    float recon_sq = 0.0f;
     for (int j = 0; j < QK_TURBO2; j++) {
-        uint8_t idx = turbo_nearest_centroid_2bit(src[j]);
+        const uint8_t idx = turbo_nearest_centroid_2bit(rot[j]);
         dst->qs[j / 4] |= (idx & 0x3) << ((j % 4) * 2);
+        recon_sq += TURBO_CENTROIDS_2BIT[idx] * TURBO_CENTROIDS_2BIT[idx];
     }
+    const float recon_norm = sqrtf(recon_sq);
+    const float corrected  = (recon_norm > 1e-10f) ? grp_norm / recon_norm : grp_norm;
+    dst->norm = __float2half(corrected);
 }
 
 // ---- Inline dequant helper: extract one float from turbo2 block ----
@@ -598,3 +627,30 @@ static __constant__ float TQ_WEIGHT_SIGNS[32] = {
     -1.0f, -1.0f, +1.0f, -1.0f, +1.0f, -1.0f, -1.0f, +1.0f,
     -1.0f, +1.0f, +1.0f, -1.0f, +1.0f, -1.0f, -1.0f, +1.0f
 };
+
+// Block type per TurboQuant KV type.
+template <ggml_type type>
+struct turbo_blk_t;
+template <> struct turbo_blk_t<GGML_TYPE_TURBO2_0> { typedef block_turbo2_0 t; };
+template <> struct turbo_blk_t<GGML_TYPE_TURBO3_0> { typedef block_turbo3_0 t; };
+template <> struct turbo_blk_t<GGML_TYPE_TURBO4_0> { typedef block_turbo4_0 t; };
+
+static constexpr __device__ bool ggml_cuda_is_turbo_type(const ggml_type type) {
+    return type == GGML_TYPE_TURBO2_0 || type == GGML_TYPE_TURBO3_0 || type == GGML_TYPE_TURBO4_0;
+}
+
+// Centroids for 4 consecutive values j0 .. j0+3 of one block (j0 % 4 == 0). Rotated domain, no norm.
+template <ggml_type type>
+static __device__ __forceinline__ void turbo_centroids4(const typename turbo_blk_t<type>::t & b, const int j0, float * c) {
+#pragma unroll
+    for (int l = 0; l < 4; ++l) {
+        const int j = j0 + l;
+        if constexpr (type == GGML_TYPE_TURBO2_0) {
+            c[l] = TURBO_CENTROIDS_2BIT[(b.qs[j/4] >> ((j%4)*2)) & 0x3];
+        } else if constexpr (type == GGML_TYPE_TURBO3_0) {
+            c[l] = TURBO_CENTROIDS_3BIT[((b.qs[j/4] >> ((j%4)*2)) & 0x3) | (((b.signs[j/8] >> (j%8)) & 0x1) << 2)];
+        } else {
+            c[l] = TURBO_CENTROIDS_4BIT[(b.qs[j/2] >> ((j%2)*4)) & 0xF];
+        }
+    }
+}

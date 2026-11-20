@@ -453,6 +453,10 @@ static void ggml_cuda_flash_attn_ext_mma_f16(ggml_backend_cuda_context & ctx, gg
         }                                                                                                                          \
     }                                                                                                                              \
 
+#define FATTN_VEC_CASES_TURBO_D(type_K_case, type_V_case) \
+    FATTN_VEC_CASE(128, type_K_case, type_V_case)         \
+    FATTN_VEC_CASE(256, type_K_case, type_V_case)
+
 #define FATTN_VEC_CASES_ALL_D(type_K_case, type_V_case) \
     FATTN_VEC_CASE( 64, type_K_case, type_V_case)       \
     FATTN_VEC_CASE(128, type_K_case, type_V_case)       \
@@ -464,6 +468,16 @@ typedef void (* fattn_vec_case_t)(ggml_backend_cuda_context & ctx, ggml_tensor *
 static fattn_vec_case_t ggml_cuda_get_fattn_vec_case(const int64_t head_size, const ggml_type type_K_in, const ggml_type type_V_in) {
     const ggml_type type_K = type_K_in == GGML_TYPE_F32 ? GGML_TYPE_F16 : type_K_in;
     const ggml_type type_V = type_V_in == GGML_TYPE_F32 ? GGML_TYPE_F16 : type_V_in;
+    FATTN_VEC_CASES_TURBO_D(TURBO2_0, TURBO2_0)
+    FATTN_VEC_CASES_TURBO_D(TURBO2_0, TURBO3_0)
+    FATTN_VEC_CASES_TURBO_D(TURBO2_0, TURBO4_0)
+    FATTN_VEC_CASES_TURBO_D(TURBO3_0, TURBO2_0)
+    FATTN_VEC_CASES_TURBO_D(TURBO3_0, TURBO3_0)
+    FATTN_VEC_CASES_TURBO_D(TURBO3_0, TURBO4_0)
+    FATTN_VEC_CASES_TURBO_D(TURBO4_0, TURBO2_0)
+    FATTN_VEC_CASES_TURBO_D(TURBO4_0, TURBO3_0)
+    FATTN_VEC_CASES_TURBO_D(TURBO4_0, TURBO4_0)
+
     FATTN_VEC_CASES_ALL_D(F16,  F16)
     FATTN_VEC_CASES_ALL_D(Q4_0, F16)
     FATTN_VEC_CASES_ALL_D(Q4_1, F16)
@@ -579,6 +593,9 @@ static bool ggml_cuda_fattn_kv_type_supported(const ggml_type type) {
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_F8_E4M3:
+        case GGML_TYPE_TURBO2_0:
+        case GGML_TYPE_TURBO3_0:
+        case GGML_TYPE_TURBO4_0:
             return true;
         default:
             return false;
