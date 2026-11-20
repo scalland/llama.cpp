@@ -466,7 +466,7 @@ static void test(void) {
     // These use explicit checks instead of assert(), which is compiled out under NDEBUG.
     auto expect = [](bool cond, const char * what) {
         if (!cond) {
-            fprintf(stderr, "test-arg-parser: check failed: %s\n", what);
+            (void) fprintf(stderr, "test-arg-parser: check failed: %s\n", what);
             exit(1);
         }
     };
