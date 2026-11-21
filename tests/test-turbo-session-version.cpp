@@ -21,20 +21,25 @@ static int failed = 0;
 
 #define CHECK(cond, msg) do { \
     if (!(cond)) { \
-        fprintf(stderr, "FAILED: %s (%s:%d)\n", msg, __FILE__, __LINE__); \
+        (void) fprintf(stderr, "FAILED: %s (%s:%d)\n", msg, __FILE__, __LINE__); \
         failed++; \
     } else { \
-        printf("OK: %s\n", msg); \
+        (void) printf("OK: %s\n", msg); \
     } \
 } while (0)
 
+// byte offset into a file, wrapped so it cannot be mixed up with a value
+struct file_offset {
+    long pos;
+};
+
 // overwrite a 32-bit field of a file in place (host byte order, same as the writer)
-static bool patch_u32(const std::string & path, long offset, uint32_t value) {
+static bool patch_u32(const std::string & path, file_offset offset, uint32_t value) {
     std::fstream f(path, std::ios::in | std::ios::out | std::ios::binary);
     if (!f) {
         return false;
     }
-    f.seekp(offset);
+    f.seekp(offset.pos);
     f.write(reinterpret_cast<const char *>(&value), sizeof(value));
     return (bool) f;
 }
@@ -67,7 +72,7 @@ static bool decode_prompt(llama_context * ctx, const std::vector<llama_token> & 
 
 int main(int argc, char ** argv) {
     if (argc < 2) {
-        fprintf(stderr, "usage: %s <model.gguf>\n", argv[0]);
+        (void) fprintf(stderr, "usage: %s <model.gguf>\n", argv[0]);
         return 77;
     }
 
@@ -77,7 +82,7 @@ int main(int argc, char ** argv) {
     mparams.n_gpu_layers = 0;
     llama_model * model = llama_model_load_from_file(argv[1], mparams);
     if (!model) {
-        fprintf(stderr, "failed to load model: %s\n", argv[1]);
+        (void) fprintf(stderr, "failed to load model: %s\n", argv[1]);
         llama_backend_free();
         return 1;
     }
@@ -87,7 +92,7 @@ int main(int argc, char ** argv) {
     cparams.n_batch = 256;
     llama_context * ctx = llama_init_from_model(model, cparams);
     if (!ctx) {
-        fprintf(stderr, "failed to create context\n");
+        (void) fprintf(stderr, "failed to create context\n");
         llama_model_free(model);
         llama_backend_free();
         return 1;
@@ -97,31 +102,30 @@ int main(int argc, char ** argv) {
     const std::vector<llama_token> prompt = { 1, 1, 1, 1 };
     CHECK(decode_prompt(ctx, prompt), "live state: prompt decoded into the context");
 
-    const std::string dir   = "test-turbo-session-version";
-    const std::string sess  = dir + "-session.bin";
-    const std::string empty = dir + "-empty.bin";
+    const char * sess  = "test-turbo-session-version-session.bin";
+    const char * empty = "test-turbo-session-version-empty.bin";
 
     // (a) version mismatch: a real session saved with the current writer, version patched to 10
-    CHECK(llama_state_save_file(ctx, sess.c_str(), prompt.data(), prompt.size()), "session saved with the current version");
-    CHECK(patch_u32(sess, 4, 10), "session version patched to 10");
+    CHECK(llama_state_save_file(ctx, sess, prompt.data(), prompt.size()), "session saved with the current version");
+    CHECK(patch_u32(sess, file_offset{ 4 }, 10), "session version patched to 10");
 
     {
         const auto before = snapshot(ctx);
         std::vector<llama_token> out(prompt.size() + 8);
         size_t n_out = 0;
-        const bool ok = llama_state_load_file(ctx, sess.c_str(), out.data(), out.size(), &n_out);
+        const bool ok = llama_state_load_file(ctx, sess, out.data(), out.size(), &n_out);
         CHECK(!ok, "session version 10 is rejected");
         CHECK(snapshot(ctx) == before, "context unchanged after session version 10 is rejected");
     }
 
     // (b) wrong magic: a real session with the magic word zeroed
-    CHECK(llama_state_save_file(ctx, sess.c_str(), prompt.data(), prompt.size()), "session re-saved for the magic case");
-    CHECK(patch_u32(sess, 0, 0), "session magic zeroed");
+    CHECK(llama_state_save_file(ctx, sess, prompt.data(), prompt.size()), "session re-saved for the magic case");
+    CHECK(patch_u32(sess, file_offset{ 0 }, 0), "session magic zeroed");
     {
         const auto before = snapshot(ctx);
         std::vector<llama_token> out(prompt.size() + 8);
         size_t n_out = 0;
-        const bool ok = llama_state_load_file(ctx, sess.c_str(), out.data(), out.size(), &n_out);
+        const bool ok = llama_state_load_file(ctx, sess, out.data(), out.size(), &n_out);
         CHECK(!ok, "session with wrong magic is rejected");
         CHECK(snapshot(ctx) == before, "context unchanged after wrong magic is rejected");
     }
@@ -132,18 +136,18 @@ int main(int argc, char ** argv) {
         const auto before = snapshot(ctx);
         std::vector<llama_token> out(prompt.size() + 8);
         size_t n_out = 0;
-        const bool ok = llama_state_load_file(ctx, empty.c_str(), out.data(), out.size(), &n_out);
+        const bool ok = llama_state_load_file(ctx, empty, out.data(), out.size(), &n_out);
         CHECK(!ok, "zero-length session file is rejected");
         CHECK(snapshot(ctx) == before, "context unchanged after zero-length file is rejected");
     }
 
-    std::remove(sess.c_str());
-    std::remove(empty.c_str());
+    std::remove(sess);
+    std::remove(empty);
 
     llama_free(ctx);
     llama_model_free(model);
     llama_backend_free();
 
-    printf("%d checks failed\n", failed);
+    (void) printf("%d checks failed\n", failed);
     return failed != 0;
 }
