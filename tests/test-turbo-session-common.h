@@ -95,9 +95,9 @@ struct turbo_session_kv_types {
 // Create a model and a context. Returns false when the model cannot be loaded.
 // Callers pass cache types and flash attention explicitly, as the turbo tests need.
 static inline bool turbo_session_setup(
-        llama_model_ptr & model, // NOLINT(bugprone-easily-swappable-parameters): distinct smart-pointer types (llama_model_ptr, llama_context_ptr), no implicit conversion between them
+        llama_model_ptr & model,
         llama_context_ptr & ctx,
-        const std::string & model_path,
+        const std::string & model_path, // NOLINT(bugprone-easily-swappable-parameters): the path is a std::string and n_ctx is uint32_t; no implicit conversion between them, and both are passed by name at call sites
         uint32_t n_ctx,
         turbo_session_kv_types kv,
         llama_flash_attn_type flash_attn) {
