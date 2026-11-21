@@ -368,6 +368,9 @@ llama_build(test-backend-ops.cpp LINK ggml Threads::Threads)
 # TurboQuant flash attention must match the CPU reference for every turbo K/V type
 llama_build_and_test(test-turbo-codec.cpp  LABEL "main behavior"  LINK ggml)
 add_test(NAME test-turbo-attn-equiv COMMAND test-backend-ops test -o FLASH_ATTN_EXT -p "type_K=turbo")
+# Stub full-session load for the red early tests (D25); replaced by the real loader in phase 5 (D17)
+add_library(test-turbo-session-support STATIC test-turbo-load-stub.cpp)
+target_include_directories(test-turbo-session-support PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 llama_build_and_test(test-backend-tensor.cpp LINK ggml)
 
