@@ -9,3 +9,8 @@ ggml-common.h
 !peg-parser
 !e2e/
 !e2e/turbo-e2e.sh
+!contract/
+!contract/session-compat.sh
+!load/
+!load/f16-throughput.sh
+!load/turbo-soak.sh
