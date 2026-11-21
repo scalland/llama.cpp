@@ -4469,6 +4469,19 @@ llama_context_params llama_context_default_params() {
     return result;
 }
 
+// TurboQuant cache types 5 and 6 are not part of this build: refuse them for K or V
+static bool llama_turbo_cache_types_allowed(ggml_type type_k, ggml_type type_v) {
+    for (const ggml_type type : { type_k, type_v }) {
+        if (type == GGML_TYPE_TURBO5_0 || type == GGML_TYPE_TURBO6_0) {
+            LLAMA_LOG_ERROR("%s: cache type %s is not supported; the supported turbo types are turbo2, turbo3 and turbo4 (and the existing cache types)\n",
+                __func__, ggml_type_name(type));
+            return false;
+        }
+    }
+
+    return true;
+}
+
 llama_context * llama_init_from_model(
                  llama_model * model,
         llama_context_params   params) {
@@ -4548,6 +4561,10 @@ llama_context * llama_init_from_model(
                 }
             }
         }
+    }
+
+    if (!llama_turbo_cache_types_allowed(params.type_k, params.type_v)) {
+        return nullptr;
     }
 
     const bool turbo_k = params.type_k >= GGML_TYPE_TURBO2_0 && params.type_k <= GGML_TYPE_TURBO6_0;

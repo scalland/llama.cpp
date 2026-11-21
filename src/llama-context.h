@@ -42,6 +42,11 @@ struct llama_memory_buffer {
 
 using llama_memory_buffers = std::map<ggml_backend_buffer_type_t, llama_memory_buffer>;
 
+// Probe seam for the turbo device gate (stub, D22).
+// Same signature as ggml_backend_dev_supports_op. nullptr means no probe is set.
+// The constructor does not read this hook yet; D11 sets the default and reads it.
+inline bool (*llama_turbo_probe_hook)(ggml_backend_dev_t dev, const ggml_tensor * op) = nullptr;
+
 struct llama_context {
     // init scheduler and compute buffers, reserve worst-case graphs
     llama_context(
