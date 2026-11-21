@@ -13325,6 +13325,20 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_flash_attn_ext(64, 64, 1, {8, 1}, 8192,  512, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0, {0, 2, 1, 3}, false));
     test_cases.emplace_back(new test_flash_attn_ext(64, 64, 1, {8, 1}, 8193,  513, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0, {0, 2, 1, 3}, false));
 
+    // Turbo K/V pairs: K and V of different turbo types, and a V-only turbo cache with F16 K.
+    // Filtered by ctest as test-turbo-mixed-* and test-turbo-attn-equiv-v (see tests/CMakeLists.txt).
+    {
+        const ggml_type turbo_types[] = { GGML_TYPE_TURBO2_0, GGML_TYPE_TURBO3_0, GGML_TYPE_TURBO4_0 };
+        for (ggml_type tk : { GGML_TYPE_F16, GGML_TYPE_TURBO2_0, GGML_TYPE_TURBO3_0, GGML_TYPE_TURBO4_0 }) {
+            for (ggml_type tv : turbo_types) {
+                if (tk == tv) {
+                    continue;
+                }
+                test_cases.emplace_back(new test_flash_attn_ext(128, 128, 8, {1, 1}, 512, 8, true, false, 0, 0, GGML_PREC_F32, tk, tv));
+            }
+        }
+    }
+
     // Grouped decode uses Q's head stride, which is not eight-element aligned here.
     for (int nb : {1, 3}) {
         for (ggml_type type_KV : {GGML_TYPE_F16, GGML_TYPE_Q8_0}) {
