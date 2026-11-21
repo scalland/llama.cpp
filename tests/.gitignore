@@ -7,3 +7,5 @@
 ggml-common.h
 **/*.swp
 !peg-parser
+!e2e/
+!e2e/turbo-e2e.sh

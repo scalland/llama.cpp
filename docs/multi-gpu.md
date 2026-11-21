@@ -47,6 +47,12 @@ Set with `--split-mode` / `-sm`.
 
 As for any CUDA program, the environment variable `CUDA_VISIBLE_DEVICES` can be used to control which GPUs to use for the CUDA backend: if you set it, llama.cpp only sees the specified GPUs. Use `--device` for selecting GPUs from among those visible to llama.cpp, this works for any backend.
 
+### Experimental turbo KV cache types
+
+`turbo2`, `turbo3` and `turbo4` are experimental KV cache types for `--cache-type-k` and `--cache-type-v`. They are supported on CPU (ARM64) and CUDA builds only. They are off unless you set one of these flags.
+
+For turbo K, flash attention is needed for speed. Keep `--flash-attn` at `on` or `auto` when you use it. Turbo V requires flash attention to be enabled.
+
 ---
 
 ## Recipes
