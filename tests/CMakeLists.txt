@@ -384,6 +384,10 @@ set(LLAMA_TURBO_TEST_MODEL "" CACHE FILEPATH "dense GGUF model for the turbo ses
 llama_build_and_test(test-turbo-session-version.cpp  LABEL "main behavior"  ARGS ${LLAMA_TURBO_TEST_MODEL})
 set_tests_properties(test-turbo-session-version PROPERTIES SKIP_RETURN_CODE 77)
 
+# deterministic session mutation test (seed 1234, 2000 mutations); run on the ASan tree
+llama_build_and_test(test-turbo-session-mutate.cpp  LABEL "main behavior"  ARGS ${LLAMA_TURBO_TEST_MODEL})
+set_tests_properties(test-turbo-session-mutate PROPERTIES SKIP_RETURN_CODE 77)
+
 # session file version 11 and q8_0 K/V context through the C API
 llama_build_and_test(test-turbo-session-contract.cpp  LABEL "main behavior"  ARGS ${LLAMA_TURBO_TEST_MODEL})
 set_tests_properties(test-turbo-session-contract PROPERTIES SKIP_RETURN_CODE 77)
