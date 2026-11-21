@@ -141,8 +141,8 @@ int main(int argc, char ** argv) {
         CHECK(snapshot(ctx) == before, "context unchanged after zero-length file is rejected");
     }
 
-    std::remove(sess);
-    std::remove(empty);
+    (void) std::remove(sess);
+    (void) std::remove(empty);
 
     llama_free(ctx);
     llama_model_free(model);
