@@ -95,9 +95,9 @@ struct turbo_session_kv_types {
 // Create a model and a context. Returns false when the model cannot be loaded.
 // Callers pass cache types and flash attention explicitly, as the turbo tests need.
 static inline bool turbo_session_setup(
-        llama_model_ptr & model,
+        llama_model_ptr & model, // NOLINT(bugprone-easily-swappable-parameters): distinct smart-pointer types (llama_model_ptr, llama_context_ptr), no implicit conversion between them
         llama_context_ptr & ctx,
-        const std::string & model_path, // NOLINT(bugprone-easily-swappable-parameters): distinct roles, no implicit conversion between them
+        const std::string & model_path,
         uint32_t n_ctx,
         turbo_session_kv_types kv,
         llama_flash_attn_type flash_attn) {
@@ -142,7 +142,8 @@ static inline bool turbo_session_read_file(const std::string & path, std::vector
     const long end = ok ? std::ftell(f) : -1;
     ok = ok && end >= 0 && std::fseek(f, 0, SEEK_SET) == 0;
     if (!ok || static_cast<unsigned long long>(end) > max_bytes) {
-        std::fclose(f);
+        // Read-only handle and the result is already false: the close status does not change the outcome.
+        (void) std::fclose(f);
         return false;
     }
 
