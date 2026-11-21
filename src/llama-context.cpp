@@ -3956,10 +3956,21 @@ bool llama_context::state_load_file(const char * filepath, llama_token * tokens_
     {
         const size_t n_state_size_cur = file.size() - file.tell();
 
-        llama_io_read_file io( &file);
-        const size_t n_read = state_read_data(io);
+        // a rejected file must leave the live state unchanged
+        std::vector<uint8_t> backup(state_get_size());
+        state_get_data(backup.data(), backup.size());
+
+        size_t n_read = 0;
+        try {
+            llama_io_read_file io( &file);
+            n_read = state_read_data(io);
+        } catch (...) {
+            state_set_data(backup.data(), backup.size());
+            throw;
+        }
 
         if (n_read != n_state_size_cur) {
+            state_set_data(backup.data(), backup.size());
             LLAMA_LOG_ERROR("%s: did not read all of the session file data! size %zu, got %zu\n", __func__, n_state_size_cur, n_read);
             return false;
         }
