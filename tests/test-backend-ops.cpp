@@ -10655,36 +10655,50 @@ static const float turbo_wht_fixed_expect[64] = {
      0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f,-0.125f,-0.125f,
 };
 
+struct turbo_wht_host_args {
+    const float * in;
+    float *       out;
+    int           n;
+    int           gs;
+};
+
 // dense host reference: out = D(s2) * H * D(s1) * in / sqrt(gs), per group
-static void turbo_wht_host_forward(const float * in, float * out, int n, int gs) {
-    const float inv_sqrt = 1.0f / sqrtf((float) gs);
-    for (int g = 0; g < n; g += gs) {
-        for (int i = 0; i < gs; i++) {
+static void turbo_wht_host_forward(const turbo_wht_host_args & a) {
+    const float inv_sqrt = 1.0f / sqrtf((float) a.gs);
+    for (int g = 0; g < a.n; g += a.gs) {
+        for (int i = 0; i < a.gs; i++) {
             double acc = 0.0;
-            for (int j = 0; j < gs; j++) {
+            for (int j = 0; j < a.gs; j++) {
                 int bits = 0;
                 for (int v = i & j; v; v >>= 1) { bits ^= (v & 1); }
-                acc += (bits ? -1.0 : 1.0) * turbo_wht_ref_s1[j] * in[g + j];
+                acc += (bits ? -1.0 : 1.0) * turbo_wht_ref_s1[j] * a.in[g + j];
             }
-            out[g + i] = (float) (acc * inv_sqrt) * turbo_wht_ref_s2[i];
+            a.out[g + i] = (float) (acc * inv_sqrt) * turbo_wht_ref_s2[i];
         }
     }
 }
 
-static bool turbo_wht_run_cpu(ggml_backend_t backend, int gs, const std::vector<float> & in, std::vector<float> & out) {
-    const int64_t n = (int64_t) in.size();
+struct turbo_wht_run_args {
+    ggml_backend_t                backend;
+    int                           gs;
+    const std::vector<float> &    in;
+    std::vector<float> &          out;
+};
+
+static bool turbo_wht_run_cpu(const turbo_wht_run_args & a) {
+    const int64_t n = (int64_t) a.in.size();
     ggml_init_params ip = { /* .mem_size = */ ggml_tensor_overhead()*8 + ggml_graph_overhead(), /* .mem_base = */ NULL, /* .no_alloc = */ true };
     ggml_context_ptr ctx(ggml_init(ip));
-    ggml_tensor * a   = ggml_new_tensor_1d(ctx.get(), GGML_TYPE_F32, n);
-    ggml_tensor * fwd = ggml_turbo_wht(ctx.get(), a, 0, gs, NULL);
+    ggml_tensor * t   = ggml_new_tensor_1d(ctx.get(), GGML_TYPE_F32, n);
+    ggml_tensor * fwd = ggml_turbo_wht(ctx.get(), t, 0, a.gs, NULL);
     ggml_cgraph * gf  = ggml_new_graph(ctx.get());
     ggml_build_forward_expand(gf, fwd);
-    ggml_backend_buffer_ptr buf(ggml_backend_alloc_ctx_tensors(ctx.get(), backend));
+    ggml_backend_buffer_ptr buf(ggml_backend_alloc_ctx_tensors(ctx.get(), a.backend));
     if (!buf) { return false; }
-    ggml_backend_tensor_set(a, in.data(), 0, n * sizeof(float));
-    if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) { return false; }
-    out.resize(n);
-    ggml_backend_tensor_get(fwd, out.data(), 0, n * sizeof(float));
+    ggml_backend_tensor_set(t, a.in.data(), 0, n * sizeof(float));
+    if (ggml_backend_graph_compute(a.backend, gf) != GGML_STATUS_SUCCESS) { return false; }
+    a.out.resize(n);
+    ggml_backend_tensor_get(fwd, a.out.data(), 0, n * sizeof(float));
     return true;
 }
 
@@ -10702,9 +10716,9 @@ static bool turbo_wht_host_checks() {
         for (int i = 0; i < n; i++) { in[i] = 0.25f * (float) ((i * 7) % 11) - 1.0f; }
 
         std::vector<float> out, ref(n), rt;
-        if (!turbo_wht_run_cpu(backend.get(), gs, in, out)) { ok = false; continue; }
+        if (!turbo_wht_run_cpu({ backend.get(), gs, in, out })) { ok = false; continue; }
 
-        turbo_wht_host_forward(in.data(), ref.data(), n, gs);
+        turbo_wht_host_forward({ in.data(), ref.data(), n, gs });
         bool ref_ok = true;
         for (int i = 0; i < n; i++) {
             if (fabsf(out[i] - ref[i]) > 1e-5f * std::max(1.0f, fabsf(ref[i]))) { ref_ok = false; }
@@ -10725,7 +10739,7 @@ static bool turbo_wht_host_checks() {
         const int gs = 64;
         std::vector<float> in(gs, 0.0f), out;
         in[0] = 1.0f;
-        bool fixed_ok = turbo_wht_run_cpu(backend.get(), gs, in, out);
+        bool fixed_ok = turbo_wht_run_cpu({ backend.get(), gs, in, out });
         for (int i = 0; fixed_ok && i < gs; i++) {
             if (fabsf(out[i] - turbo_wht_fixed_expect[i]) > 1e-6f) { fixed_ok = false; }
         }
@@ -10735,11 +10749,16 @@ static bool turbo_wht_host_checks() {
     return ok;
 }
 
+struct turbo_wht_case {
+    int group_size;
+    int direction;
+};
+
 struct test_turbo_wht : public test_case {
     const int group_size;
     const int direction;
 
-    test_turbo_wht(int group_size, int direction) : group_size(group_size), direction(direction) {}
+    explicit test_turbo_wht(turbo_wht_case c) : group_size(c.group_size), direction(c.direction) {}
 
     std::string vars() override {
         return VARS_TO_STR2(group_size, direction);
@@ -11961,7 +11980,7 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     // TurboQuant WHT, group sizes 64 and 128, forward and inverse
     for (int gs : {64, 128}) {
         for (int dir : {0, 1}) {
-            test_cases.emplace_back(new test_turbo_wht(gs, dir));
+            test_cases.emplace_back(new test_turbo_wht({ gs, dir }));
         }
     }
 
