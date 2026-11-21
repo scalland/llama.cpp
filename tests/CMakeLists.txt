@@ -369,6 +369,11 @@ llama_build(test-backend-ops.cpp LINK ggml Threads::Threads)
 llama_build_and_test(test-turbo-codec.cpp  LABEL "main behavior"  LINK ggml)
 add_test(NAME test-turbo-attn-equiv COMMAND test-backend-ops test -o FLASH_ATTN_EXT -p "type_K=turbo")
 
+# session version and magic rejection; needs a dense GGUF model path, skipped when unset
+set(LLAMA_TURBO_TEST_MODEL "" CACHE FILEPATH "dense GGUF model for the turbo session tests")
+llama_build_and_test(test-turbo-session-version.cpp  LABEL "main behavior"  ARGS ${LLAMA_TURBO_TEST_MODEL})
+set_tests_properties(test-turbo-session-version PROPERTIES SKIP_RETURN_CODE 77)
+
 llama_build_and_test(test-backend-tensor.cpp LINK ggml)
 
 if (BUILD_SHARED_LIBS)
