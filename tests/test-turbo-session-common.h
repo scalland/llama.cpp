@@ -12,18 +12,18 @@
 //   n_token_count u32, tokens (4 bytes each)            src/llama-context.cpp:3978-3979
 //   arch string: u32 length, then bytes                 src/llama-context.cpp:4070, src/llama-io.cpp:5-10
 //   n_stream u32                                        src/llama-kv-cache.cpp:2245
-//   per stream: cell_count u32                          src/llama-kv-cache.cpp:2300
+//   per stream: cell_count u32                          src/llama-kv-cache.cpp:2295
 //     if cell_count > 0, per-cell KV meta:              src/llama-kv-cache.cpp:2385-2416
 //       pos i32, n_seq_id u32, ext (only when has_cell_ext), seq_id i32 x n_seq_id
 //     KV data header: v_trans u32, n_layer u32,
-//       n_rot_k u32, n_rot_v u32                        src/llama-kv-cache.cpp:2427-2430
-//     per layer K: type i32, row size u64, payload      src/llama-kv-cache.cpp:2435-2446
+//       n_rot_k u32, n_rot_v u32                        src/llama-kv-cache.cpp:2424-2427
+//     per layer K: type i32, row size u64, payload      src/llama-kv-cache.cpp:2440-2448
 //       payload = row size * cell_count
 //     per layer V, v_trans false: type i32, row u64,
-//       payload = row size * cell_count                 src/llama-kv-cache.cpp:2453-2477
+//       payload = row size * cell_count                 src/llama-kv-cache.cpp:2467-2475
 //     per layer V, v_trans true: type i32, element size u32,
 //       GQA embedding size u32, payload = n_embd_v_gqa * cell_count * element size
-//                                                        src/llama-kv-cache.cpp:2479-2502
+//                                                        src/llama-kv-cache.cpp:2496-2510
 //
 // The seq session file (llama_state_seq_save_file) has a different header and is not walked here.
 
@@ -41,35 +41,35 @@
 
 // Field offsets of one full-session file. Filled by turbo_session_walk.
 struct turbo_session_cell {
-    size_t     pos_off      = 0; // src/llama-kv-cache.cpp:2402 (pos, i32)
+    size_t     pos_off      = 0; // src/llama-kv-cache.cpp:2403 (pos, i32)
     llama_pos  pos          = 0;
-    size_t     n_seq_id_off = 0; // src/llama-kv-cache.cpp:2401 (u32)
-    size_t   ext_off       = 0; // src/llama-kv-cache.cpp:2404-2406 (only when has_ext)
-    size_t   seq_ids_off   = 0; // src/llama-kv-cache.cpp:2409-2411 (i32 each)
+    size_t     n_seq_id_off = 0; // src/llama-kv-cache.cpp:2404 (u32)
+    size_t   ext_off       = 0; // src/llama-kv-cache.cpp:2407-2408 (only when has_ext)
+    size_t   seq_ids_off   = 0; // src/llama-kv-cache.cpp:2411-2412 (i32 each)
     uint32_t n_seq_id      = 0;
 };
 
 struct turbo_session_layer {
-    size_t k_type_off   = 0; // src/llama-kv-cache.cpp:2437 (i32)
-    size_t k_row_off    = 0; // src/llama-kv-cache.cpp:2441 (u64)
+    size_t k_type_off   = 0; // src/llama-kv-cache.cpp:2440 (i32)
+    size_t k_row_off    = 0; // src/llama-kv-cache.cpp:2444 (u64)
     size_t k_data_off   = 0;
     size_t k_data_len   = 0;
-    size_t v_type_off   = 0; // src/llama-kv-cache.cpp:2458 or :2485 (i32)
-    size_t v_row_off    = 0; // non-trans: u64 row size, src/llama-kv-cache.cpp:2465
-    size_t v_el_off     = 0; // trans only: u32 element size, src/llama-kv-cache.cpp:2490
-    size_t v_gqa_off    = 0; // trans only: u32 GQA embedding size, src/llama-kv-cache.cpp:2494
+    size_t v_type_off   = 0; // src/llama-kv-cache.cpp:2467 or :2496 (i32)
+    size_t v_row_off    = 0; // non-trans: u64 row size, src/llama-kv-cache.cpp:2471
+    size_t v_el_off     = 0; // trans only: u32 element size, src/llama-kv-cache.cpp:2500
+    size_t v_gqa_off    = 0; // trans only: u32 GQA embedding size, src/llama-kv-cache.cpp:2503
     size_t v_data_off   = 0;
     size_t v_data_len   = 0;
 };
 
 struct turbo_session_stream {
-    size_t   cell_count_off = 0; // src/llama-kv-cache.cpp:2300 (u32)
+    size_t   cell_count_off = 0; // src/llama-kv-cache.cpp:2295 (u32)
     uint32_t n_cells        = 0;
     std::vector<turbo_session_cell> cells;
-    size_t   v_trans_off    = 0; // src/llama-kv-cache.cpp:2423 (u32)
-    size_t   n_layer_off    = 0; // src/llama-kv-cache.cpp:2424 (u32)
-    size_t   n_rot_k_off    = 0; // src/llama-kv-cache.cpp:2425 (u32)
-    size_t   n_rot_v_off    = 0; // src/llama-kv-cache.cpp:2426 (u32)
+    size_t   v_trans_off    = 0; // src/llama-kv-cache.cpp:2424 (u32)
+    size_t   n_layer_off    = 0; // src/llama-kv-cache.cpp:2425 (u32)
+    size_t   n_rot_k_off    = 0; // src/llama-kv-cache.cpp:2426 (u32)
+    size_t   n_rot_v_off    = 0; // src/llama-kv-cache.cpp:2427 (u32)
     bool     v_trans        = false;
     std::vector<turbo_session_layer> layers;
 };
@@ -128,21 +128,27 @@ static inline bool turbo_session_save(
     return llama_state_save_file(ctx, path.c_str(), tokens.data(), tokens.size());
 }
 
-// Read a whole file into one buffer. Returns false when the file cannot be opened or read.
-static inline bool turbo_session_read_file(const std::string & path, std::vector<uint8_t> & buf) {
+// Read a whole file into one buffer. Returns false when the file cannot be opened or read,
+// or when it is larger than max_bytes. The size is checked before the buffer is allocated.
+static inline bool turbo_session_read_file(const std::string & path, std::vector<uint8_t> & buf, size_t max_bytes) {
+    buf.clear();
+
     FILE * f = std::fopen(path.c_str(), "rb");
     if (!f) {
         return false;
     }
 
-    buf.clear();
-    uint8_t chunk[65536];
-    size_t  n = 0;
-    while ((n = std::fread(chunk, 1, sizeof(chunk), f)) > 0) {
-        buf.insert(buf.end(), chunk, chunk + n);
+    bool ok = std::fseek(f, 0, SEEK_END) == 0;
+    const long end = ok ? std::ftell(f) : -1;
+    ok = ok && end >= 0 && std::fseek(f, 0, SEEK_SET) == 0;
+    if (!ok || static_cast<unsigned long long>(end) > max_bytes) {
+        std::fclose(f);
+        return false;
     }
 
-    const bool ok     = std::ferror(f) == 0;
+    buf.resize(static_cast<size_t>(end));
+    const size_t n = buf.empty() ? 0 : std::fread(buf.data(), 1, buf.size(), f);
+    ok = n == buf.size() && std::ferror(f) == 0;
     const bool closed = std::fclose(f) == 0;
     return ok && closed;
 }
