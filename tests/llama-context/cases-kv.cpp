@@ -820,6 +820,37 @@ struct case_comp_padding : ctx_test {
     }
 };
 
+// - turbo5 and turbo6 are not part of this build
+// - the context must be refused for each of them, as K and as V
+struct case_turbo_unsupported_types : ctx_test {
+    const char * name() const override { return "turbo_unsupported_types"; }
+
+    const char * description() const override {
+        return "turbo5 and turbo6 cache types are refused as K and as V";
+    }
+
+    case_result run(model_run & mr) const override {
+        for (const ggml_type type : { GGML_TYPE_TURBO5_0, GGML_TYPE_TURBO6_0 }) {
+            for (const bool as_k : { true, false }) {
+                ctx_opts opts;
+                opts.n_ctx    = 32;
+                opts.n_batch  = 1;
+                opts.n_ubatch = 1;
+                opts.type_k   = as_k ? type : GGML_TYPE_F16;
+                opts.type_v   = as_k ? GGML_TYPE_F16 : type;
+
+                // the refusal is the expected outcome, it is not an error of the case
+                opts.quiet = true;
+
+                auto ctx = mr.ctx(opts);
+                CTX_REQUIRE(!ctx, std::string("context was not refused for ") + ggml_type_name(type) + (as_k ? " as K" : " as V"));
+            }
+        }
+
+        return case_result::pass();
+    }
+};
+
 std::vector<ctx_test_ptr> make_kv_cases() {
     std::vector<ctx_test_ptr> cases;
 
@@ -837,6 +868,7 @@ std::vector<ctx_test_ptr> make_kv_cases() {
     cases.push_back(std::make_unique<case_state_restore_fragmented>());
     cases.push_back(std::make_unique<case_noalloc>());
     cases.push_back(std::make_unique<case_comp_padding>());
+    cases.push_back(std::make_unique<case_turbo_unsupported_types>());
 
     return cases;
 }
