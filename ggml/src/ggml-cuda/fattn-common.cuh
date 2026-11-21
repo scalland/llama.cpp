@@ -3,6 +3,7 @@
 #include "common.cuh"
 #include "convert.cuh"
 #include "vecdotq.cuh"
+#include "turbo-quant.cuh"
 
 #include <cstdint>
 
@@ -669,6 +670,37 @@ static __device__ __forceinline__ void dequantize_V_q8_0(const void * __restrict
     }
 }
 
+// Same thread layout as the F8 path: 4 values per thread per 128-value block.
+template <ggml_type type_K, int D, int nthreads>
+static __device__ __forceinline__ float vec_dot_fattn_vec_KQ_turbo(
+    const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
+    typedef typename turbo_blk_t<type_K>::t blk_t;
+    static_assert(nthreads*4 == QK_TURBO2, "turbo K dot needs 32 threads per 128-value block");
+    GGML_UNUSED(Q_q8);
+    GGML_UNUSED(Q_ds_v);
+
+    const blk_t * K_b = (const blk_t *) K_c;
+    const int j0 = (threadIdx.x % nthreads)*4;
+
+    float sum = 0.0f;
+#pragma unroll
+    for (int c = 0; c < D/QK_TURBO2; ++c) {
+        float k[4];
+        turbo_centroids4<type_K>(K_b[c], j0, k);
+        const float norm = __half2float(K_b[c].norm);
+#pragma unroll
+        for (int l = 0; l < 4; ++l) {
+#ifdef V_DOT2_F32_F16_AVAILABLE
+            const float q = __half2float(((const half *) Q_v)[c*4 + l]);
+#else
+            const float q = ((const float *) Q_v)[c*4 + l];
+#endif // V_DOT2_F32_F16_AVAILABLE
+            sum += norm * k[l] * q;
+        }
+    }
+    return sum;
+}
+
 template <ggml_type type_K, int D, int nthreads>
 constexpr __device__ vec_dot_KQ_t get_vec_dot_KQ() {
     if constexpr (type_K == GGML_TYPE_F16) {
@@ -687,9 +719,33 @@ constexpr __device__ vec_dot_KQ_t get_vec_dot_KQ() {
         return vec_dot_fattn_vec_KQ_bf16<D, nthreads>;
     } else if constexpr (type_K == GGML_TYPE_F8_E4M3) {
         return vec_dot_fattn_vec_KQ_f8_e4m3<D, nthreads>;
+    } else if constexpr (ggml_cuda_is_turbo_type(type_K)) {
+        return vec_dot_fattn_vec_KQ_turbo<type_K, D, nthreads>;
     } else {
         static_assert(type_K == -1, "bad type");
         return nullptr;
+    }
+}
+
+// Four values i0 .. i0+3 of one turbo block; T is half or float.
+template <ggml_type type_V, typename T, int ne>
+static __device__ __forceinline__ void dequantize_V_turbo(const void * __restrict__ vx, void * __restrict__ dst, const int64_t i0) {
+    static_assert(ne == 4, "bad ne");
+    typedef typename turbo_blk_t<type_V>::t blk_t;
+    const blk_t & b = ((const blk_t *) vx)[i0 / QK_TURBO2];
+
+    float c[4];
+    turbo_centroids4<type_V>(b, int(i0 % QK_TURBO2), c);
+    const float norm = __half2float(b.norm);
+
+#pragma unroll
+    for (int l = 0; l < 4; ++l) {
+        if constexpr (std::is_same_v<T, half>) {
+            ((half *) dst)[l] = __float2half(c[l]*norm);
+        } else {
+            static_assert(std::is_same_v<T, float>, "unsupported type");
+            ((float *) dst)[l] = c[l]*norm;
+        }
     }
 }
 
@@ -711,6 +767,8 @@ constexpr __device__ dequantize_V_t get_dequantize_V() {
         return dequantize_V_bf16<float, ne>;
     } else if constexpr (type_V == GGML_TYPE_F8_E4M3) {
         return dequantize_V_f8_e4m3<T, ne>;
+    } else if constexpr (ggml_cuda_is_turbo_type(type_V)) {
+        return dequantize_V_turbo<type_V, T, ne>;
     } else {
         static_assert(type_V == -1, "bad type");
         return nullptr;

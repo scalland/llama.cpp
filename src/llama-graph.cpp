@@ -3085,6 +3085,11 @@ ggml_tensor * llm_graph_context::build_pos_bias(ggml_tensor * pos_bucket, ggml_t
     return pos_bias;
 }
 
+// TurboQuant KV cache types (ggml-turbo-quant.c rotates on write, so the cache holds R*k and R*v)
+static bool llama_is_turbo_kv_type(ggml_type t) {
+    return t >= GGML_TYPE_TURBO2_0 && t <= GGML_TYPE_TURBO6_0;
+}
+
 ggml_tensor * llm_graph_context::build_attn_mha(
          ggml_tensor * q,
          ggml_tensor * k,
@@ -3098,6 +3103,19 @@ ggml_tensor * llm_graph_context::build_attn_mha(
                float   kq_scale,
                  int   il) const {
     const bool v_trans = v->nb[1] > v->nb[2];
+
+    // TurboQuant: K and V are stored rotated by R (WHT). Rotating q by R keeps <Rq, Rk> = <q, k>;
+    // the attention output is R * (sum p_i v_i), so it is rotated back by R^T when V is turbo.
+    const bool k_turbo = llama_is_turbo_kv_type(k->type);
+    const bool v_turbo = llama_is_turbo_kv_type(v->type);
+    if (k_turbo || v_turbo) {
+        GGML_ASSERT(v_mla == nullptr && "TurboQuant KV cache does not support MLA absorption yet");
+        GGML_ASSERT(q->ne[0] % 128 == 0 && "TurboQuant KV cache needs head_dim to be a multiple of 128");
+    }
+    if (k_turbo) {
+        q = ggml_turbo_wht(ctx0, ggml_cont(ctx0, q), 0, 0, nullptr);
+        cb(q, "q_turbo_rot", il);
+    }
 
     // split the batch into streams if needed
     const auto n_stream = kv_rows ? kv_rows->ne[1] : k->ne[3];
@@ -3232,6 +3250,11 @@ ggml_tensor * llm_graph_context::build_attn_mha(
             // all nodes between the KV store and the attention output are run on the CPU
             ggml_backend_sched_set_tensor_backend(sched, cur, backend_cpu);
         }
+    }
+
+    if (v_turbo) {
+        cur = ggml_turbo_wht(ctx0, ggml_cont(ctx0, cur), 1, 0, nullptr);
+        cb(cur, "kqv_turbo_unrot", il);
     }
 
     ggml_build_forward_expand(gf, cur);

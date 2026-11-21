@@ -1,5 +1,6 @@
 #include "convert.cuh"
 #include "dequantize.cuh"
+#include "turbo-quant.cuh"
 
 #include <cstdint>
 
@@ -552,8 +553,58 @@ to_bf16_cuda_t ggml_get_to_bf16_cuda(ggml_type type) {
     }
 }
 
+// TurboQuant: dequantize to f16 in the rotated domain (same values as the CPU codec).
+
+// One CUDA block per (row, 128-value chunk), one thread per value.
+template <ggml_type type>
+static __global__ void dequantize_turbo_nc(const void * __restrict__ vx, half * __restrict__ y,
+        const int64_t ne00, const int64_t ne01, const int64_t ne02,
+        const int64_t s01, const int64_t s02, const int64_t s03) {
+    typedef typename turbo_blk_t<type>::t blk_t;
+    const int64_t r   = blockIdx.x;
+    const int64_t i01 = r % ne01;
+    const int64_t i02 = (r / ne01) % ne02;
+    const int64_t i03 = r / (ne01*ne02);
+    const blk_t & b = ((const blk_t *) vx)[i01*s01 + i02*s02 + i03*s03 + blockIdx.y];
+    const int j = threadIdx.x;
+
+    float c;
+    if constexpr (type == GGML_TYPE_TURBO2_0) {
+        c = TURBO_CENTROIDS_2BIT[(b.qs[j/4] >> ((j%4)*2)) & 0x3];
+    } else if constexpr (type == GGML_TYPE_TURBO3_0) {
+        const int idx = ((b.qs[j/4] >> ((j%4)*2)) & 0x3) | (((b.signs[j/8] >> (j%8)) & 0x1) << 2);
+        c = TURBO_CENTROIDS_3BIT[idx];
+    } else {
+        c = TURBO_CENTROIDS_4BIT[(b.qs[j/2] >> ((j%2)*4)) & 0xF];
+    }
+    y[r*ne00 + blockIdx.y*128 + j] = __float2half(c * __half2float(b.norm));
+}
+
+template <ggml_type type>
+static void dequantize_turbo_nc_cuda(const void * x, half * y,
+        const int64_t ne00, const int64_t ne01, const int64_t ne02, const int64_t ne03,
+        const int64_t s01, const int64_t s02, const int64_t s03, cudaStream_t stream) {
+    GGML_ASSERT(ne00 % 128 == 0);
+    GGML_UNUSED(ne03);
+    const dim3 grid(ne01*ne02*ne03, ne00/128, 1);
+    dequantize_turbo_nc<type><<<grid, 128, 0, stream>>>(x, y, ne00, ne01, ne02, s01, s02, s03);
+}
+
+template <ggml_type type>
+static void dequantize_turbo_cont_cuda(const void * x, half * y, const int64_t k, cudaStream_t stream) {
+    GGML_ASSERT(k % 128 == 0);
+    // one row per turbo block, so the flat output index equals r*128 + j
+    dequantize_turbo_nc_cuda<type>(x, y, 128, k/128, 1, 1, 1, 0, 0, stream);
+}
+
 to_fp16_cuda_t ggml_get_to_fp16_cuda(ggml_type type) {
     switch (type) {
+        case GGML_TYPE_TURBO2_0:
+            return dequantize_turbo_cont_cuda<GGML_TYPE_TURBO2_0>;
+        case GGML_TYPE_TURBO3_0:
+            return dequantize_turbo_cont_cuda<GGML_TYPE_TURBO3_0>;
+        case GGML_TYPE_TURBO4_0:
+            return dequantize_turbo_cont_cuda<GGML_TYPE_TURBO4_0>;
         case GGML_TYPE_Q1_0:
             return dequantize_block_cont_cuda<QK1_0, QR1_0, dequantize_q1_0>;
         case GGML_TYPE_Q2_0:
@@ -675,6 +726,12 @@ to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
 
 to_fp16_nc_cuda_t ggml_get_to_fp16_nc_cuda(ggml_type type) {
     switch (type) {
+        case GGML_TYPE_TURBO2_0:
+            return dequantize_turbo_nc_cuda<GGML_TYPE_TURBO2_0>;
+        case GGML_TYPE_TURBO3_0:
+            return dequantize_turbo_nc_cuda<GGML_TYPE_TURBO3_0>;
+        case GGML_TYPE_TURBO4_0:
+            return dequantize_turbo_nc_cuda<GGML_TYPE_TURBO4_0>;
         case GGML_TYPE_F32:
             return convert_unary_cuda<float>;
         case GGML_TYPE_Q1_0:

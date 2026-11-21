@@ -3956,10 +3956,21 @@ bool llama_context::state_load_file(const char * filepath, llama_token * tokens_
     {
         const size_t n_state_size_cur = file.size() - file.tell();
 
-        llama_io_read_file io( &file);
-        const size_t n_read = state_read_data(io);
+        // a rejected file must leave the live state unchanged
+        std::vector<uint8_t> backup(state_get_size());
+        state_get_data(backup.data(), backup.size());
+
+        size_t n_read = 0;
+        try {
+            llama_io_read_file io( &file);
+            n_read = state_read_data(io);
+        } catch (...) {
+            state_set_data(backup.data(), backup.size());
+            throw;
+        }
 
         if (n_read != n_state_size_cur) {
+            state_set_data(backup.data(), backup.size());
             LLAMA_LOG_ERROR("%s: did not read all of the session file data! size %zu, got %zu\n", __func__, n_state_size_cur, n_read);
             return false;
         }
@@ -4469,6 +4480,19 @@ llama_context_params llama_context_default_params() {
     return result;
 }
 
+// TurboQuant cache types 5 and 6 are not part of this build: refuse them for K or V
+static bool llama_turbo_cache_types_allowed(ggml_type type_k, ggml_type type_v) {
+    for (const ggml_type type : { type_k, type_v }) {
+        if (type == GGML_TYPE_TURBO5_0 || type == GGML_TYPE_TURBO6_0) {
+            LLAMA_LOG_ERROR("%s: cache type %s is not supported; the supported turbo types are turbo2, turbo3 and turbo4 (and the existing cache types)\n",
+                __func__, ggml_type_name(type));
+            return false;
+        }
+    }
+
+    return true;
+}
+
 llama_context * llama_init_from_model(
                  llama_model * model,
         llama_context_params   params) {
@@ -4548,6 +4572,15 @@ llama_context * llama_init_from_model(
                 }
             }
         }
+    }
+
+    if (!llama_turbo_cache_types_allowed(params.type_k, params.type_v)) {
+        return nullptr;
+    }
+
+    const bool turbo_k = params.type_k >= GGML_TYPE_TURBO2_0 && params.type_k <= GGML_TYPE_TURBO6_0;
+    if (turbo_k && params.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_DISABLED) {
+        LLAMA_LOG_WARN("%s: TurboQuant K cache without flash_attn does not use the fused attention kernels\n", __func__);
     }
 
     if (ggml_is_quantized(params.type_v) && params.flash_attn_type != LLAMA_FLASH_ATTN_TYPE_ENABLED) {

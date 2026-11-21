@@ -289,16 +289,10 @@ const std::vector<ggml_type> kv_cache_types = {
     GGML_TYPE_IQ4_NL,
     GGML_TYPE_Q5_0,
     GGML_TYPE_Q5_1,
+    GGML_TYPE_TURBO2_0,
+    GGML_TYPE_TURBO3_0,
+    GGML_TYPE_TURBO4_0,
 };
-
-static ggml_type kv_cache_type_from_str(const std::string & s) {
-    for (const auto & type : kv_cache_types) {
-        if (ggml_type_name(type) == s) {
-            return type;
-        }
-    }
-    throw std::runtime_error("Unsupported cache type: " + s);
-}
 
 static std::string get_all_kv_cache_types() {
     std::ostringstream msg;
@@ -306,6 +300,15 @@ static std::string get_all_kv_cache_types() {
         msg << ggml_type_name(type) << (&type == &kv_cache_types.back() ? "" : ", ");
     }
     return msg.str();
+}
+
+static ggml_type kv_cache_type_from_str(const std::string & s) {
+    for (const auto & type : kv_cache_types) {
+        if (ggml_type_name(type) == s) {
+            return type;
+        }
+    }
+    throw std::invalid_argument("Unsupported cache type: " + s + "; allowed values: " + get_all_kv_cache_types());
 }
 
 static bool parse_bool_value(const std::string & value) {

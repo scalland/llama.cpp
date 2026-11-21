@@ -260,7 +260,14 @@ extern "C" {
         GGML_TYPE_Q1_0    = 41,
         GGML_TYPE_Q2_0    = 42,
         GGML_TYPE_F8_E4M3 = 43,
-        GGML_TYPE_COUNT   = 44,
+        // 44-49 reserved for upstream's future types
+        // TurboQuant KV-cache types (runtime-only, never written to GGUF). Fixed IDs at the top of the range.
+        GGML_TYPE_TURBO2_0 = 50, // TurboQuant 2-bit KV cache: WHT + 2-bit PolarQuant
+        GGML_TYPE_TURBO3_0 = 51, // TurboQuant 3-bit KV cache: WHT + 3-bit PolarQuant
+        GGML_TYPE_TURBO4_0 = 52, // TurboQuant 4-bit KV cache: WHT + 4-bit PolarQuant
+        GGML_TYPE_TURBO5_0 = 53, // TurboQuant 5-bit KV cache: WHT + 5-bit PolarQuant
+        GGML_TYPE_TURBO6_0 = 54, // TurboQuant 6-bit KV cache: WHT + 6-bit PolarQuant
+        GGML_TYPE_COUNT   = 55,
     };
 
     // [TAG_GGML_PREC]
@@ -429,6 +436,8 @@ extern "C" {
 
         GGML_OP_GLU,
 
+        GGML_OP_TURBO_WHT,
+
         GGML_OP_COUNT,
     };
 
@@ -575,6 +584,16 @@ extern "C" {
 
     // accepts a UTF-8 path, even on Windows
     GGML_API FILE *  ggml_fopen(const char * fname, const char * mode);
+
+    // TurboQuant Walsh-Hadamard Transform (rotation for KV cache compression)
+    // Applies WHT rotation to group_size-element groups along ne[0]: sign1 -> butterfly -> sign2 -> normalize
+    // direction: 0 = forward, 1 = inverse. group_size: 0 = auto (64 or 128 from ne[0]).
+    GGML_API struct ggml_tensor * ggml_turbo_wht(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   direction,
+            int                   group_size,
+            struct ggml_tensor  * scale);        // NULL = no InnerQ scaling
 
     GGML_API void    ggml_print_object (const struct ggml_object * obj);
     GGML_API void    ggml_print_objects(const struct ggml_context * ctx);

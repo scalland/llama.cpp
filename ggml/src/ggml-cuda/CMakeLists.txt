@@ -119,6 +119,9 @@ if (CUDAToolkit_FOUND)
     file(GLOB   SRCS "template-instances/fattn-tile*.cu")
     list(APPEND GGML_SOURCES_CUDA ${SRCS})
     file(GLOB   SRCS "template-instances/fattn-mma*.cu")
+    # turbo MMA flash-attention instances need turbo-aware loads in the f16 MMA kernel, which this
+    # tree does not have yet; turbo attention falls back to the CPU backend until they are ported.
+    list(FILTER SRCS EXCLUDE REGEX "fattn-mma-turbo-instance")
     list(APPEND GGML_SOURCES_CUDA ${SRCS})
     file(GLOB   SRCS "template-instances/mmq*.cu")
     list(APPEND GGML_SOURCES_CUDA ${SRCS})
