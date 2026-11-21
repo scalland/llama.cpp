@@ -372,6 +372,11 @@ add_test(NAME test-turbo-attn-equiv COMMAND test-backend-ops test -o FLASH_ATTN_
 add_library(test-turbo-session-support STATIC test-turbo-load-stub.cpp)
 target_include_directories(test-turbo-session-support PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+# session version and magic rejection; needs a dense GGUF model path, skipped when unset
+set(LLAMA_TURBO_TEST_MODEL "" CACHE FILEPATH "dense GGUF model for the turbo session tests")
+llama_build_and_test(test-turbo-session-version.cpp  LABEL "main behavior"  ARGS ${LLAMA_TURBO_TEST_MODEL})
+set_tests_properties(test-turbo-session-version PROPERTIES SKIP_RETURN_CODE 77)
+
 llama_build_and_test(test-backend-tensor.cpp LINK ggml)
 
 if (BUILD_SHARED_LIBS)
