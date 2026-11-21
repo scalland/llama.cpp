@@ -368,6 +368,13 @@ llama_build(test-backend-ops.cpp LINK ggml Threads::Threads)
 # TurboQuant flash attention must match the CPU reference for every turbo K/V type
 llama_build_and_test(test-turbo-codec.cpp  LABEL "main behavior"  LINK ggml)
 add_test(NAME test-turbo-attn-equiv COMMAND test-backend-ops test -o FLASH_ATTN_EXT -p "type_K=turbo")
+add_test(NAME test-turbo-attn-equiv-v COMMAND test-backend-ops test -o FLASH_ATTN_EXT -p "type_K=f16,type_V=turbo")
+foreach(pair k2v3 k2v4 k3v2 k3v4 k4v2 k4v3)
+    string(REGEX REPLACE "k([234])v([234])" "\\1" kt "${pair}")
+    string(REGEX REPLACE "k([234])v([234])" "\\2" vt "${pair}")
+    add_test(NAME test-turbo-mixed-${pair} COMMAND test-backend-ops test -o FLASH_ATTN_EXT -p "type_K=turbo${kt},type_V=turbo${vt}")
+endforeach()
+add_test(NAME test-turbo-wht COMMAND test-backend-ops test -o TURBO_WHT)
 # Stub full-session load for the red early tests (D25); replaced by the real loader in phase 5 (D17)
 add_library(test-turbo-session-support STATIC test-turbo-load-stub.cpp)
 target_include_directories(test-turbo-session-support PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -376,6 +383,10 @@ target_include_directories(test-turbo-session-support PUBLIC ${CMAKE_CURRENT_SOU
 set(LLAMA_TURBO_TEST_MODEL "" CACHE FILEPATH "dense GGUF model for the turbo session tests")
 llama_build_and_test(test-turbo-session-version.cpp  LABEL "main behavior"  ARGS ${LLAMA_TURBO_TEST_MODEL})
 set_tests_properties(test-turbo-session-version PROPERTIES SKIP_RETURN_CODE 77)
+
+# session file version 11 and q8_0 K/V context through the C API
+llama_build_and_test(test-turbo-session-contract.cpp  LABEL "main behavior"  ARGS ${LLAMA_TURBO_TEST_MODEL})
+set_tests_properties(test-turbo-session-contract PROPERTIES SKIP_RETURN_CODE 77)
 
 llama_build_and_test(test-backend-tensor.cpp LINK ggml)
 
